@@ -44,7 +44,7 @@ class MecanumTeleopNode(Node):
         v_fr = vx + vy + omega
         v_rl = vx + vy - omega
         v_rr = vx - vy + omega
-
+        
         # --- メッセージの作成とパブリッシュ ---
         speed_msg = Float32MultiArray()
         speed_msg.data = [float(v_fl), float(v_fr), float(v_rl), float(v_rr)]
