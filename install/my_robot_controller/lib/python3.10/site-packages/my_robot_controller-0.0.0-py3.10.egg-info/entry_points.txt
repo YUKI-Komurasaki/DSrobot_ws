@@ -1,4 +1,0 @@
-[console_scripts]
-can_bridge_node = my_robot_controller.can_bridge_node:main
-my_teleop_node = my_robot_controller.my_teleop_node:main
-
