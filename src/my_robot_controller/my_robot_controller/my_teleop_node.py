@@ -27,11 +27,11 @@ class MecanumTeleopNode(Node):
         # --- PS4 Controller Mapping (Standard joy_node) ---
         # msg.axes[1]: Left Stick Vertical   (Up: 1.0, Down: -1.0) -> Vx
         # msg.axes[0]: Left Stick Horizontal (Left: 1.0, Right: -1.0) -> Vy
-        # msg.axes[3]: Right Stick Horizontal (Left: 1.0, Right: -1.0) -> Omega (Turn)
+        # msg.axes[2]: Right Stick Horizontal (Left: 1.0, Right: -1.0) -> Omega (Turn)
         
         vx = msg.axes[1]      # 前後
         vy = msg.axes[0]      # 左右スライド
-        omega = msg.axes[3]   # 旋回（左に倒すと正の値＝反時計回り）
+        omega = msg.axes[2]   # 旋回（左に倒すと正の値＝反時計回り）
 
         # --- メカナムホイールの逆運動学計算 ---
         # 簡易式: 車体形状やホイール半径を1とした場合
