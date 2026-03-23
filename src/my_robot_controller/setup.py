@@ -28,6 +28,7 @@ setup(
             'can_bridge_node = my_robot_controller.can_bridge_node:main',
             'multi_teleop_node = my_robot_controller.multi_mode_teleop_node:main',
             'aruco_node = my_robot_controller.aruco_analysis_node:main',
+            'arm_controller_node = my_robot_controller.arm_controller_node:main',
         ],
     },
 )
