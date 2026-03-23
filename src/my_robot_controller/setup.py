@@ -1,3 +1,5 @@
+import os
+from glob import glob
 from setuptools import find_packages, setup
 
 package_name = 'my_robot_controller'
@@ -10,22 +12,22 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+        # launchファイルをインストール対象に含める設定
+        (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
     maintainer='yuki-komurasaki',
     maintainer_email='yuki-komurasaki@todo.todo',
-    description='TODO: Package description',
-    license='TODO: License declaration',
-    extras_require={
-        'test': [
-            'pytest',
-        ],
-    },
+    description='My Robot Control Package',
+    license='Apache License 2.0',
+    tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'my_teleop_node = my_robot_controller.my_teleop_node:main',
+            # ノード名 = パッケージ名.ファイル名:関数名
             'can_bridge_node = my_robot_controller.can_bridge_node:main',
+            'multi_teleop_node = my_robot_controller.multi_mode_teleop_node:main',
+            'aruco_node = my_robot_controller.aruco_analysis_node:main',
         ],
     },
 )
