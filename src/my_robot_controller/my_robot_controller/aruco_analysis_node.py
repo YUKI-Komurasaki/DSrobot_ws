@@ -22,53 +22,64 @@ class ArucoToMotorSpeedNode(Node):
         self.parameters = aruco.DetectorParameters_create()
 
         # --- 制御パラメータ ---
-        self.target_width_ratio = 0.25  # 画面横幅の25%の大きさで停止
-        self.deadzone_x = 0.05          # 左右ズレの許容範囲 (5%)
-        self.deadzone_dist = 0.02       # 距離ズレの許容範囲 (2%)
+        self.target_width_ratio = 0.25
+        self.deadzone_x = 0.05
+        self.deadzone_dist = 0.02
         
         self.last_detection_time = time.time()
-        self.get_logger().info('Aruco Tracking Node with Safety Stop started.')
+        
+        # GUI設定用パラメータの宣言
+        self.declare_parameter('target_id', 0)
+        
+        self.get_logger().info('Aruco Node with Dynamic ID Tracking started.')
 
     def image_callback(self, msg):
         frame = self.bridge.imgmsg_to_cv2(msg, "bgr8")
         h, w, _ = frame.shape
         center_x_ref = w / 2.0 
         
+        # 現在設定されているターゲットIDをGUIから取得
+        target_id = self.get_parameter('target_id').get_parameter_value().integer_value
+        
         vx, vy, omega = 0.0, 0.0, 0.0
         corners, ids, _ = aruco.detectMarkers(frame, self.aruco_dict, parameters=self.parameters)
         
-        if ids is not None:
-            self.last_detection_time = time.time() # 検知時間を更新
-            
-            c = corners[0][0]
-            marker_center_x = c[:, 0].mean() 
-            marker_width = abs(c[0][0] - c[1][0]) 
-            
-            # 1. 左右のズレ (誤差を -1.0 ~ 1.0 に正規化)
-            error_x = (marker_center_x - center_x_ref) / (w / 2.0)
-            
-            # 2. 距離のズレ (目標サイズとの差)
-            error_dist = (self.target_width_ratio * w - marker_width) / (self.target_width_ratio * w)
-
-            # --- P制御 (比例制御) ---
-            # 旋回: ズレが不感帯より大きければ回転
-            if abs(error_x) > self.deadzone_x:
-                omega = -error_x * 0.7  # 0.7は回転感度係数
-            
-            # 前後: ズレが不感帯より大きければ移動
-            if abs(error_dist) > self.deadzone_dist:
-                vx = error_dist * 0.5   # 0.5は前進感度係数
-
-            # 描画
-            aruco.drawDetectedMarkers(frame, corners, ids)
-            cv2.putText(frame, f"Vx:{vx:.2f} W:{omega:.2f}", (20, 30), 1, 1, (0, 255, 0), 2)
+        found_target = False
         
-        else:
-            # マーカーが見つからない場合、0.5秒以上経過したら停止
+        if ids is not None:
+            # 見つかった全てのマーカーの中から target_id を探す
+            for i, marker_id in enumerate(ids):
+                if marker_id[0] == target_id:
+                    found_target = True
+                    self.last_detection_time = time.time()
+                    
+                    c = corners[i][0] # 一致したインデックスiの角を使用
+                    marker_center_x = c[:, 0].mean() 
+                    marker_width = abs(c[0][0] - c[1][0]) 
+                    
+                    # 1. 左右のズレ
+                    error_x = (marker_center_x - center_x_ref) / (w / 2.0)
+                    # 2. 距離のズレ
+                    error_dist = (self.target_width_ratio * w - marker_width) / (self.target_width_ratio * w)
+
+                    # P制御
+                    if abs(error_x) > self.deadzone_x:
+                        omega = -error_x * 0.7
+                    if abs(error_dist) > self.deadzone_dist:
+                        vx = error_dist * 0.5
+
+                    # ターゲットに印を付ける
+                    aruco.drawDetectedMarkers(frame, [corners[i]], ids[i])
+                    cv2.putText(frame, f"TARGET ID:{target_id}", (20, 60), 1, 1, (0, 0, 255), 2)
+                    break # ターゲットを見つけたらループを抜ける
+
+        # マーカーが見つからない、またはターゲットIDではない場合
+        if not found_target:
             if time.time() - self.last_detection_time > 0.5:
                 vx, vy, omega = 0.0, 0.0, 0.0
+            cv2.putText(frame, f"SEARCHING ID:{target_id}", (20, 60), 1, 1, (255, 0, 0), 2)
 
-        # --- メカナム逆運動学 ---
+        # メカナム逆運動学
         v_fl = vx - vy - omega
         v_fr = vx + vy + omega
         v_rl = vx + vy - omega
@@ -78,6 +89,7 @@ class ArucoToMotorSpeedNode(Node):
         speed_msg.data = [float(v_fl), float(v_fr), float(v_rl), float(v_rr)]
         self.publisher_.publish(speed_msg)
         
+        cv2.putText(frame, f"Vx:{vx:.2f} W:{omega:.2f}", (20, 30), 1, 1, (0, 255, 0), 2)
         cv2.imshow("Aruco Tracking", frame)
         cv2.waitKey(1)
 
