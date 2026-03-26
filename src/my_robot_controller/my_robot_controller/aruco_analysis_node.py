@@ -11,87 +11,83 @@ class ArucoToMotorSpeedNode(Node):
     def __init__(self):
         super().__init__('aruco_to_motor_speed_node')
         
+        # オリジナルの映像を購読
         self.subscription = self.create_subscription(
             Image, 'image_raw', self.image_callback, 10)
         
+        # モーター速度命令のパブリッシャー
         self.publisher_ = self.create_publisher(
             Float32MultiArray, 'aruco_speeds', 10)
+            
+        # ★追加：枠線を描き込んだ「加工済み映像」のパブリッシャー
+        self.image_pub = self.create_publisher(
+            Image, 'image_with_markers', 10)
         
         self.bridge = CvBridge()
-        self.aruco_dict = aruco.getPredefinedDictionary(aruco.DICT_4X4_50)
-        self.parameters = aruco.DetectorParameters_create()
+        self.aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
+        self.parameters = cv2.aruco.DetectorParameters()
 
         # --- 制御パラメータ ---
-        self.target_width_ratio = 0.25
+        self.target_width_ratio = 0.25  # 目標サイズ
         self.deadzone_x = 0.05
         self.deadzone_dist = 0.02
         
         self.last_detection_time = time.time()
-        
-        # GUI設定用パラメータの宣言
-        self.declare_parameter('target_id', 0)
-        
-        self.get_logger().info('Aruco Node with Dynamic ID Tracking started.')
+        self.get_logger().info('Aruco Analysis Node with Foxglove View started.')
 
     def image_callback(self, msg):
+        # ROSの画像をOpenCV形式に変換
         frame = self.bridge.imgmsg_to_cv2(msg, "bgr8")
         h, w, _ = frame.shape
         center_x_ref = w / 2.0 
         
-        # 現在設定されているターゲットIDをGUIから取得
-        target_id = self.get_parameter('target_id').get_parameter_value().integer_value
-        
         vx, vy, omega = 0.0, 0.0, 0.0
         corners, ids, _ = aruco.detectMarkers(frame, self.aruco_dict, parameters=self.parameters)
         
-        found_target = False
-        
         if ids is not None:
-            # 見つかった全てのマーカーの中から target_id を探す
-            for i, marker_id in enumerate(ids):
-                if marker_id[0] == target_id:
-                    found_target = True
-                    self.last_detection_time = time.time()
-                    
-                    c = corners[i][0] # 一致したインデックスiの角を使用
-                    marker_center_x = c[:, 0].mean() 
-                    marker_width = abs(c[0][0] - c[1][0]) 
-                    
-                    # 1. 左右のズレ
-                    error_x = (marker_center_x - center_x_ref) / (w / 2.0)
-                    # 2. 距離のズレ
-                    error_dist = (self.target_width_ratio * w - marker_width) / (self.target_width_ratio * w)
+            self.last_detection_time = time.time() 
+            
+            # 最初のマーカーで制御計算
+            c = corners[0][0]
+            marker_center_x = c[:, 0].mean() 
+            marker_width = abs(c[0][0] - c[1][0]) 
+            
+            # 誤差計算
+            error_x = (marker_center_x - center_x_ref) / (w / 2.0)
+            error_dist = (self.target_width_ratio * w - marker_width) / (self.target_width_ratio * w)
 
-                    # P制御
-                    if abs(error_x) > self.deadzone_x:
-                        omega = -error_x * 0.7
-                    if abs(error_dist) > self.deadzone_dist:
-                        vx = error_dist * 0.5
+            # P制御
+            if abs(error_x) > self.deadzone_x:
+                omega = -error_x * 0.7
+            if abs(error_dist) > self.deadzone_dist:
+                vx = error_dist * 0.5
 
-                    # ターゲットに印を付ける
-                    aruco.drawDetectedMarkers(frame, [corners[i]], ids[i])
-                    cv2.putText(frame, f"TARGET ID:{target_id}", (20, 60), 1, 1, (0, 0, 255), 2)
-                    break # ターゲットを見つけたらループを抜ける
-
-        # マーカーが見つからない、またはターゲットIDではない場合
-        if not found_target:
+            # ★フレームに枠線と情報を描き込む
+            aruco.drawDetectedMarkers(frame, corners, ids)
+            cv2.putText(frame, f"Vx:{vx:.2f} W:{omega:.2f}", (20, 40), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+        
+        else:
+            # 見失ったら停止（0.5秒猶予）
             if time.time() - self.last_detection_time > 0.5:
                 vx, vy, omega = 0.0, 0.0, 0.0
-            cv2.putText(frame, f"SEARCHING ID:{target_id}", (20, 60), 1, 1, (255, 0, 0), 2)
 
-        # メカナム逆運動学
+        # --- メカナム逆運動学 ---
         v_fl = vx - vy - omega
         v_fr = vx + vy + omega
         v_rl = vx + vy - omega
         v_rr = vx - vy + omega
         
+        # モーター速度を送信
         speed_msg = Float32MultiArray()
         speed_msg.data = [float(v_fl), float(v_fr), float(v_rl), float(v_rr)]
         self.publisher_.publish(speed_msg)
         
-        cv2.putText(frame, f"Vx:{vx:.2f} W:{omega:.2f}", (20, 30), 1, 1, (0, 255, 0), 2)
-        cv2.imshow("Aruco Tracking", frame)
-        cv2.waitKey(1)
+        # ★追加：加工後の画像をROSメッセージに変換してFoxgloveへ送る
+        annotated_image_msg = self.bridge.cv2_to_imgmsg(frame, "bgr8")
+        # 元のタイムスタンプを引き継ぐ（重要）
+        annotated_image_msg.header = msg.header
+        self.image_pub.publish(annotated_image_msg)
 
 def main(args=None):
     rclpy.init(args=args)
@@ -101,13 +97,12 @@ def main(args=None):
     except KeyboardInterrupt:
         pass
     finally:
-        # 終了時に停止信号を送る
+        # 終了時に停止
         stop_msg = Float32MultiArray()
         stop_msg.data = [0.0, 0.0, 0.0, 0.0]
         node.publisher_.publish(stop_msg)
         node.destroy_node()
         rclpy.shutdown()
-        cv2.destroyAllWindows()
 
 if __name__ == '__main__':
     main()
