@@ -22,12 +22,13 @@ setup(
     description='Robot Control Package with CAN and Arm Support',
     license='Apache License 2.0',
     tests_require=['pytest'],
-    entry_points={
+entry_points={
         'console_scripts': [
-            'analysis = my_robot_controller.analysis:main',
-            'teleop = my_robot_controller.teleop:main',
+            # 左側が実行名（Launchで使用）、右側が [フォルダ名].[ファイル名]:[関数名]
+            'arm_controller_node = my_robot_controller.arm_controller_node:main',
+            'aruco_analysis_node = my_robot_controller.aruco_analysis_node:main',
             'can_bridge_node = my_robot_controller.can_bridge_node:main',
-            'arm_controller_node.py = my_robot_controller.arm_controller_node:main',
+            'multi_mode_teleop_node = my_robot_controller.multi_mode_teleop_node:main',
         ],
     },
 )

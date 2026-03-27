@@ -17,17 +17,17 @@ def generate_launch_description():
             }]
         ),
 
-        # 2. ArUco解析
+        # ArUco解析ノード
         Node(
             package='my_robot_controller',
-            executable='analysis',
+            executable='aruco_analysis_node', # 修正
             name='aruco_analysis_node',
         ),
 
-        # 3. テレオペ
+        # テレオペノード
         Node(
             package='my_robot_controller',
-            executable='teleop',
+            executable='multi_mode_teleop_node', # 修正
             name='multi_mode_teleop_node',
         ),
 

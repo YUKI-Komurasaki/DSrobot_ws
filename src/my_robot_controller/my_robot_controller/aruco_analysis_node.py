@@ -103,6 +103,7 @@ def main(args=None):
         node.publisher_.publish(stop_msg)
         node.destroy_node()
         rclpy.shutdown()
+        pass
 
 if __name__ == '__main__':
     main()
