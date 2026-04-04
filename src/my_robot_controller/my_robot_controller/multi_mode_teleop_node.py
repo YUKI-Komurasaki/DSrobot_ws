@@ -60,7 +60,7 @@ class MultiModeTeleopNode(Node):
             # 手動モードなら、スティックから計算
             vx = msg.axes[1]    # L上下
             vy = msg.axes[0]    # L左右
-            omega = msg.axes[2] # R左右
+            omega = -msg.axes[2] # R左右
             
             v_fl = vx - vy - omega
             v_fr = vx + vy + omega
